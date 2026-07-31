@@ -1,5 +1,6 @@
 .gradle/
 .local-android/
+.local-gradle/
 
 local.properties
 
