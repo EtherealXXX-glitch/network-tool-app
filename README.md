@@ -28,10 +28,17 @@
 app/
 ```
 
+最新发布包：
+
+```text
+release/网络调试助手_V2.0.2.apk
+release/网络调试助手_V2.0.2_微信传输.zip
+```
+
 用 Android Studio 打开项目根目录：
 
 ```text
-C:\Users\Administrator\Desktop\K16-phone
+C:\Users\Administrator\Desktop\net-tools
 ```
 
 等待 Gradle 同步完成后，连接手机运行即可。

@@ -1,0 +1,14 @@
+.gradle/
+.local-android/
+
+local.properties
+
+**/build/
+**/dist/
+**/__pycache__/
+*.pyc
+
+*.apk
+*.zip
+!release/网络调试助手_V2.0.2.apk
+!release/网络调试助手_V2.0.2_微信传输.zip
