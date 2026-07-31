@@ -19,15 +19,15 @@ final class AppendSettings {
     };
 
     int checksumMode;
-    int tailMode = 1;
+    int tailMode;
     int startOffset;
     int crcPoly = 0xA001;
     int crcInit = 0xFFFF;
     int crcXorOut;
-    boolean highByteFirst = true;
-    boolean inputReflect = true;
-    boolean outputReflect = true;
-    String customTailHex = "0D";
+    boolean highByteFirst;
+    boolean inputReflect;
+    boolean outputReflect;
+    String customTailHex = "";
 
     byte[] apply(byte[] payload) {
         byte[] checksum = checksumBytes(payload);

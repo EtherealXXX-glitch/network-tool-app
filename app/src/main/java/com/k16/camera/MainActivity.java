@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
     private static final String DEFAULT_BIND_HOST = "0.0.0.0";
     private static final String DEFAULT_PORT = "8866";
     private static final int AUTO_SEND_MIN_MS = 50;
-    private static final String PREFS_NAME = "netassist_config";
+    private static final String PREFS_NAME = "netassist_config_blank_defaults";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final NetworkDebugSession session = new NetworkDebugSession();
@@ -114,6 +114,7 @@ public class MainActivity extends Activity {
     private int selectedPage;
     private boolean restoringConfig;
     private boolean darkTheme;
+    private boolean reloadingLocalHosts;
 
     private final NetworkDebugSession.Listener networkListener = new NetworkDebugSession.Listener() {
         @Override
@@ -212,31 +213,22 @@ public class MainActivity extends Activity {
                 dp(42)
         ));
 
-        LinearLayout workbench = new LinearLayout(this);
-        workbench.setOrientation(LinearLayout.HORIZONTAL);
-        workbench.setBackgroundColor(appBackgroundColor());
-        rootLayout.addView(workbench, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0,
-                1
-        ));
-
         tabBar = new LinearLayout(this);
-        tabBar.setOrientation(LinearLayout.VERTICAL);
+        tabBar.setOrientation(LinearLayout.HORIZONTAL);
         tabBar.setBackgroundColor(sidebarColor());
-        workbench.addView(tabBar, new LinearLayout.LayoutParams(
-                dp(86),
-                ViewGroup.LayoutParams.MATCH_PARENT
+        rootLayout.addView(tabBar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(48)
         ));
-        addTab("连接\n设置", 0);
-        addTab("设置", 1);
+        addTab("连接设置", 0);
         addTab("通信", 2);
+        addTab("设置", 1);
 
         pageHost = new FrameLayout(this);
         pageHost.setBackgroundColor(appBackgroundColor());
-        workbench.addView(pageHost, new LinearLayout.LayoutParams(
-                0,
+        rootLayout.addView(pageHost, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
                 1
         ));
 
@@ -274,17 +266,17 @@ public class MainActivity extends Activity {
         localHostSpinner = spinner(new String[]{DEFAULT_BIND_HOST});
         localHostListBlock = labeled("本地主机地址列表", localHostSpinner);
         networkPanel.addView(localHostListBlock);
-        localHostInput = edit(DEFAULT_BIND_HOST, "可手动输入本机监听IP");
+        localHostInput = edit("", "可手动输入本机监听IP");
         localHostInputBlock = labeled("本地主机地址", localHostInput);
         networkPanel.addView(localHostInputBlock);
 
-        localPortInput = edit(DEFAULT_PORT, "本地主机端口");
+        localPortInput = edit("", "本地主机端口");
         localPortInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         localPortBlock = labeled("本地主机端口", localPortInput);
         networkPanel.addView(localPortBlock);
 
-        remoteHostInput = edit(DEFAULT_REMOTE_HOST, "远程主机地址");
-        remotePortInput = edit(DEFAULT_PORT, "远程端口");
+        remoteHostInput = edit("", "远程主机地址");
+        remotePortInput = edit("", "远程端口");
         remotePortInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         remoteHostBlock = labeled("远程主机地址", remoteHostInput);
         remotePortBlock = labeled("远程端口", remotePortInput);
@@ -345,7 +337,7 @@ public class MainActivity extends Activity {
         localHostSpinner.setOnItemSelectedListener(new SimpleItemSelectedListener() {
             @Override
             public void onItemSelected() {
-                if (restoringConfig) {
+                if (restoringConfig || reloadingLocalHosts) {
                     return;
                 }
                 Object selected = localHostSpinner.getSelectedItem();
@@ -399,8 +391,6 @@ public class MainActivity extends Activity {
         receiveAutoLineBox = checkbox("接收区自动换行");
         receiveHiddenBox = checkbox("接收数据不显示");
         receiveSaveBox = checkbox("接收保存到文件");
-        receiveLogModeBox.setChecked(true);
-        receiveAutoLineBox.setChecked(true);
         receivePanel.addView(receiveLogModeBox);
         receivePanel.addView(receiveAutoLineBox);
         receivePanel.addView(receiveHiddenBox);
@@ -427,7 +417,6 @@ public class MainActivity extends Activity {
 
         sendEscapeBox = checkbox("自动解析转义符");
         sendAppendBox = checkbox("自动发送附加位");
-        sendEscapeBox.setChecked(true);
         sendPanel.addView(sendEscapeBox);
         sendPanel.addView(sendAppendBox);
 
@@ -443,7 +432,7 @@ public class MainActivity extends Activity {
 
         LinearLayout autoRow = row();
         autoSendBox = checkbox("循环周期");
-        intervalInput = edit("1000", "ms");
+        intervalInput = edit("", "ms");
         intervalInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         autoRow.addView(autoSendBox, new LinearLayout.LayoutParams(0, dp(44), 1));
         autoRow.addView(intervalInput, new LinearLayout.LayoutParams(0, dp(44), 1));
@@ -519,7 +508,7 @@ public class MainActivity extends Activity {
         monitorPanel.addView(logActions);
 
         LinearLayout sendPanel = panel(content, "发送区");
-        sendInput = edit("demo 7500", "发送内容");
+        sendInput = edit("", "发送内容");
         sendInput.setSingleLine(false);
         sendInput.setGravity(Gravity.TOP | Gravity.START);
         sendInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
@@ -581,8 +570,9 @@ public class MainActivity extends Activity {
         tab.setOnClickListener(v -> showPage(index));
         tab.setGravity(Gravity.CENTER);
         tabBar.addView(tab, new LinearLayout.LayoutParams(
+                0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(72)
+                1
         ));
     }
 
@@ -722,16 +712,7 @@ public class MainActivity extends Activity {
     }
 
     private String defaultCustomCommand(int index) {
-        switch (index) {
-            case 0:
-                return "{\"GetDevStatus\":{}}";
-            case 1:
-                return "demo 7500";
-            case 2:
-                return "AT";
-            default:
-                return "";
-        }
+        return "";
     }
 
     private void sendFile(Uri uri) {
@@ -831,10 +812,10 @@ public class MainActivity extends Activity {
         editor.putBoolean("dark_theme", darkTheme);
         editor.putInt("page", selectedPage);
         editor.putInt("mode", modeSpinner.getSelectedItemPosition());
-        editor.putString("local_host", text(localHostInput, DEFAULT_BIND_HOST));
-        editor.putString("local_port", text(localPortInput, DEFAULT_PORT));
-        editor.putString("remote_host", text(remoteHostInput, DEFAULT_REMOTE_HOST));
-        editor.putString("remote_port", text(remotePortInput, DEFAULT_PORT));
+        editor.putString("local_host", rawText(localHostInput));
+        editor.putString("local_port", rawText(localPortInput));
+        editor.putString("remote_host", rawText(remoteHostInput));
+        editor.putString("remote_port", rawText(remotePortInput));
         editor.putBoolean("udp_broadcast", udpBroadcastBox.isChecked());
         editor.putBoolean("receive_hex", receiveHexRadio.isChecked());
         editor.putBoolean("receive_log_mode", receiveLogModeBox.isChecked());
@@ -845,7 +826,7 @@ public class MainActivity extends Activity {
         editor.putBoolean("send_escape", sendEscapeBox.isChecked());
         editor.putBoolean("send_append", sendAppendBox.isChecked());
         editor.putBoolean("auto_send", autoSendBox.isChecked());
-        editor.putString("auto_interval", text(intervalInput, "1000"));
+        editor.putString("auto_interval", rawText(intervalInput));
         editor.putString("send_text", sendInput.getText().toString());
         for (int i = 0; i < customCommandInputs.length; i++) {
             if (customCommandInputs[i] != null) {
@@ -875,28 +856,28 @@ public class MainActivity extends Activity {
         try {
             selectedPage = boundIndex(prefs.getInt("page", 0), 3);
             modeSpinner.setSelection(boundIndex(prefs.getInt("mode", 0), modeSpinner.getCount()));
-            localHostInput.setText(prefs.getString("local_host", DEFAULT_BIND_HOST));
-            localPortInput.setText(prefs.getString("local_port", DEFAULT_PORT));
-            remoteHostInput.setText(prefs.getString("remote_host", DEFAULT_REMOTE_HOST));
-            remotePortInput.setText(prefs.getString("remote_port", DEFAULT_PORT));
+            localHostInput.setText(prefs.getString("local_host", ""));
+            localPortInput.setText(prefs.getString("local_port", ""));
+            remoteHostInput.setText(prefs.getString("remote_host", ""));
+            remotePortInput.setText(prefs.getString("remote_port", ""));
             udpBroadcastBox.setChecked(prefs.getBoolean("udp_broadcast", false));
 
             boolean receiveHex = prefs.getBoolean("receive_hex", false);
             receiveHexRadio.setChecked(receiveHex);
             receiveAsciiRadio.setChecked(!receiveHex);
-            receiveLogModeBox.setChecked(prefs.getBoolean("receive_log_mode", true));
-            receiveAutoLineBox.setChecked(prefs.getBoolean("receive_auto_line", true));
+            receiveLogModeBox.setChecked(prefs.getBoolean("receive_log_mode", false));
+            receiveAutoLineBox.setChecked(prefs.getBoolean("receive_auto_line", false));
             receiveHiddenBox.setChecked(prefs.getBoolean("receive_hidden", false));
             receiveSaveBox.setChecked(prefs.getBoolean("receive_save", false));
 
             boolean sendHex = prefs.getBoolean("send_hex", false);
             sendHexRadio.setChecked(sendHex);
             sendAsciiRadio.setChecked(!sendHex);
-            sendEscapeBox.setChecked(prefs.getBoolean("send_escape", true));
+            sendEscapeBox.setChecked(prefs.getBoolean("send_escape", false));
             sendAppendBox.setChecked(prefs.getBoolean("send_append", false));
             autoSendBox.setChecked(prefs.getBoolean("auto_send", false));
-            intervalInput.setText(prefs.getString("auto_interval", "1000"));
-            sendInput.setText(prefs.getString("send_text", "demo 7500"));
+            intervalInput.setText(prefs.getString("auto_interval", ""));
+            sendInput.setText(prefs.getString("send_text", ""));
             for (int i = 0; i < customCommandInputs.length; i++) {
                 if (customCommandInputs[i] != null) {
                     customCommandInputs[i].setText(prefs.getString("custom_command_" + i, defaultCustomCommand(i)));
@@ -906,15 +887,15 @@ public class MainActivity extends Activity {
             darkThemeRadio.setChecked(darkTheme);
 
             appendSettings.checksumMode = boundIndex(prefs.getInt("append_checksum", 0), AppendSettings.CHECKSUM_NAMES.length);
-            appendSettings.tailMode = boundIndex(prefs.getInt("append_tail", 1), AppendSettings.TAIL_NAMES.length);
+            appendSettings.tailMode = boundIndex(prefs.getInt("append_tail", 0), AppendSettings.TAIL_NAMES.length);
             appendSettings.startOffset = Math.max(0, prefs.getInt("append_start", 0));
             appendSettings.crcPoly = prefs.getInt("append_poly", 0xA001) & 0xFFFF;
             appendSettings.crcInit = prefs.getInt("append_init", 0xFFFF) & 0xFFFF;
             appendSettings.crcXorOut = prefs.getInt("append_xor", 0) & 0xFFFF;
-            appendSettings.highByteFirst = prefs.getBoolean("append_high_first", true);
-            appendSettings.inputReflect = prefs.getBoolean("append_input_reflect", true);
-            appendSettings.outputReflect = prefs.getBoolean("append_output_reflect", true);
-            appendSettings.customTailHex = prefs.getString("append_tail_hex", "0D");
+            appendSettings.highByteFirst = prefs.getBoolean("append_high_first", false);
+            appendSettings.inputReflect = prefs.getBoolean("append_input_reflect", false);
+            appendSettings.outputReflect = prefs.getBoolean("append_output_reflect", false);
+            appendSettings.customTailHex = prefs.getString("append_tail_hex", "");
             appendSummaryText.setText(appendSettings.summary());
         } finally {
             restoringConfig = false;
@@ -1083,9 +1064,15 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {
         }
         if (localHostSpinner != null) {
+            String currentHostText = localHostInput == null ? "" : localHostInput.getText().toString();
+            reloadingLocalHosts = true;
             ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, hosts);
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             localHostSpinner.setAdapter(adapter);
+            reloadingLocalHosts = false;
+            if (localHostInput != null) {
+                localHostInput.setText(currentHostText);
+            }
         }
     }
 
@@ -1160,6 +1147,10 @@ public class MainActivity extends Activity {
     private String text(EditText editText, String fallback) {
         String value = editText.getText().toString().trim();
         return value.isEmpty() ? fallback : value;
+    }
+
+    private String rawText(EditText editText) {
+        return editText.getText().toString().trim();
     }
 
     private int parsePort(String value, int fallback) {
