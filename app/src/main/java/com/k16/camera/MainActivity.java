@@ -9,6 +9,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -61,6 +63,7 @@ public class MainActivity extends Activity {
     private LogBuffer logBuffer;
     private LinearLayout tabBar;
     private FrameLayout pageHost;
+    private LinearLayout rootLayout;
     private View connectionPage;
     private View settingsPage;
     private View communicationPage;
@@ -80,10 +83,14 @@ public class MainActivity extends Activity {
     private EditText sendInput;
     private EditText intervalInput;
     private TextView stateText;
+    private TextView connectedCountText;
     private TextView logText;
     private TextView counterText;
     private TextView appendSummaryText;
     private TextView cacheText;
+    private RadioButton lightThemeRadio;
+    private RadioButton darkThemeRadio;
+    private final EditText[] customCommandInputs = new EditText[4];
     private ScrollView logScroll;
     private Button openButton;
 
@@ -106,11 +113,12 @@ public class MainActivity extends Activity {
     private long txBytes;
     private int selectedPage;
     private boolean restoringConfig;
+    private boolean darkTheme;
 
     private final NetworkDebugSession.Listener networkListener = new NetworkDebugSession.Listener() {
         @Override
         public void onStateChanged(String state) {
-            stateText.setText(state);
+            updateConnectionStatus(state);
             openButton.setText(session.isRunning() ? "关闭" : "打开");
             appendSystem(state);
         }
@@ -153,6 +161,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        darkTheme = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("dark_theme", false);
         logBuffer = new LogBuffer(getCacheDir());
         buildUi();
         reloadLocalHosts();
@@ -188,31 +197,46 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(241, 244, 248));
+        rootLayout = new LinearLayout(this);
+        rootLayout.setOrientation(LinearLayout.VERTICAL);
+        rootLayout.setBackgroundColor(appBackgroundColor());
 
         TextView appBar = title("网络调试助手 V2.0.2");
-        appBar.setBackgroundColor(Color.rgb(18, 28, 42));
-        appBar.setTextColor(Color.WHITE);
-        appBar.setPadding(dp(16), dp(14), dp(16), dp(12));
-        root.addView(appBar);
+        appBar.setBackgroundColor(titleBarColor());
+        appBar.setTextColor(titleTextColor());
+        appBar.setTextSize(16);
+        appBar.setTypeface(Typeface.DEFAULT_BOLD);
+        appBar.setPadding(dp(14), dp(9), dp(14), dp(8));
+        rootLayout.addView(appBar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(42)
+        ));
+
+        LinearLayout workbench = new LinearLayout(this);
+        workbench.setOrientation(LinearLayout.HORIZONTAL);
+        workbench.setBackgroundColor(appBackgroundColor());
+        rootLayout.addView(workbench, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1
+        ));
 
         tabBar = new LinearLayout(this);
-        tabBar.setOrientation(LinearLayout.HORIZONTAL);
-        tabBar.setBackgroundColor(Color.rgb(229, 235, 242));
-        root.addView(tabBar, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(50)
+        tabBar.setOrientation(LinearLayout.VERTICAL);
+        tabBar.setBackgroundColor(sidebarColor());
+        workbench.addView(tabBar, new LinearLayout.LayoutParams(
+                dp(86),
+                ViewGroup.LayoutParams.MATCH_PARENT
         ));
-        addTab("连接设置", 0);
-        addTab("收发设置", 1);
+        addTab("连接\n设置", 0);
+        addTab("设置", 1);
         addTab("通信", 2);
 
         pageHost = new FrameLayout(this);
-        root.addView(pageHost, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
+        pageHost.setBackgroundColor(appBackgroundColor());
+        workbench.addView(pageHost, new LinearLayout.LayoutParams(
                 0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
                 1
         ));
 
@@ -223,16 +247,16 @@ public class MainActivity extends Activity {
         pageHost.addView(settingsPage);
         pageHost.addView(communicationPage);
 
-        setContentView(root);
+        setContentView(rootLayout);
     }
 
     private View buildConnectionPage() {
         ScrollView scrollView = pageScroll();
         LinearLayout content = pageContent(scrollView);
 
-        content.addView(panelTitle("网络设置"));
+        LinearLayout networkPanel = panel(content, "网络设置");
         modeSpinner = spinner(new String[]{"TCP Server", "TCP Client", "UDP"});
-        content.addView(labeled("协议类型", modeSpinner));
+        networkPanel.addView(labeled("协议类型", modeSpinner));
 
         LinearLayout openRow = row();
         openButton = button("打开");
@@ -245,40 +269,50 @@ public class MainActivity extends Activity {
         openRow.addView(openButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         openRow.addView(refreshIpButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         setRowMargins(openRow);
-        content.addView(openRow);
+        networkPanel.addView(openRow);
 
         localHostSpinner = spinner(new String[]{DEFAULT_BIND_HOST});
         localHostListBlock = labeled("本地主机地址列表", localHostSpinner);
-        content.addView(localHostListBlock);
+        networkPanel.addView(localHostListBlock);
         localHostInput = edit(DEFAULT_BIND_HOST, "可手动输入本机监听IP");
         localHostInputBlock = labeled("本地主机地址", localHostInput);
-        content.addView(localHostInputBlock);
+        networkPanel.addView(localHostInputBlock);
 
         localPortInput = edit(DEFAULT_PORT, "本地主机端口");
         localPortInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         localPortBlock = labeled("本地主机端口", localPortInput);
-        content.addView(localPortBlock);
+        networkPanel.addView(localPortBlock);
 
         remoteHostInput = edit(DEFAULT_REMOTE_HOST, "远程主机地址");
         remotePortInput = edit(DEFAULT_PORT, "远程端口");
         remotePortInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         remoteHostBlock = labeled("远程主机地址", remoteHostInput);
         remotePortBlock = labeled("远程端口", remotePortInput);
-        content.addView(remoteHostBlock);
-        content.addView(remotePortBlock);
+        networkPanel.addView(remoteHostBlock);
+        networkPanel.addView(remotePortBlock);
 
         udpBroadcastBox = checkbox("UDP广播");
-        content.addView(udpBroadcastBox);
+        networkPanel.addView(udpBroadcastBox);
 
-        stateText = body("未打开");
-        stateText.setTextColor(Color.rgb(44, 60, 78));
-        content.addView(stateText);
+        LinearLayout statusBox = new LinearLayout(this);
+        statusBox.setOrientation(LinearLayout.VERTICAL);
+        statusBox.setPadding(dp(12), dp(10), dp(12), dp(10));
+        statusBox.setBackground(box(disconnectedColor(), disconnectedColor(), 2));
+        stateText = body("未连接");
+        stateText.setTextSize(20);
+        stateText.setTypeface(Typeface.DEFAULT_BOLD);
+        stateText.setTextColor(Color.WHITE);
+        connectedCountText = body("设备：0 台");
+        connectedCountText.setTextSize(15);
+        connectedCountText.setTextColor(Color.WHITE);
+        statusBox.addView(stateText);
+        statusBox.addView(connectedCountText);
+        networkPanel.addView(statusBox, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
 
-        TextView hint = body("手机做 TCP Server 时，开发板要连接的服务端 IP 必须是手机真实 IP。也可以监听 0.0.0.0 表示所有网卡。");
-        hint.setTextColor(Color.rgb(88, 99, 112));
-        content.addView(hint);
-
-        content.addView(panelTitle("配置存储"));
+        LinearLayout configPanel = panel(content, "配置存储");
         LinearLayout configRow = row();
         Button saveConfigButton = button("保存配置");
         Button loadConfigButton = button("恢复配置");
@@ -300,7 +334,7 @@ public class MainActivity extends Activity {
         configRow.addView(loadConfigButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         configRow.addView(clearConfigButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         setRowMargins(configRow);
-        content.addView(configRow);
+        configPanel.addView(configRow);
 
         modeSpinner.setOnItemSelectedListener(new SimpleItemSelectedListener() {
             @Override
@@ -327,14 +361,39 @@ public class MainActivity extends Activity {
         ScrollView scrollView = pageScroll();
         LinearLayout content = pageContent(scrollView);
 
-        content.addView(panelTitle("接收设置"));
+        LinearLayout aboutPanel = panel(content, "简介");
+        TextView aboutText = body("网络调试助手 V2.0.2\n作者：EtherealXXX-glitch");
+        aboutText.setTextColor(primaryTextColor());
+        aboutPanel.addView(aboutText);
+
+        LinearLayout themePanel = panel(content, "界面设置");
+        RadioGroup themeGroup = horizontalRadioGroup();
+        lightThemeRadio = radio("浅色分格");
+        darkThemeRadio = radio("深色分格");
+        themeGroup.addView(lightThemeRadio);
+        themeGroup.addView(darkThemeRadio);
+        if (darkTheme) {
+            darkThemeRadio.setChecked(true);
+        } else {
+            lightThemeRadio.setChecked(true);
+        }
+        themeGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (restoringConfig) {
+                return;
+            }
+            boolean selectedDark = checkedId == darkThemeRadio.getId();
+            switchTheme(selectedDark);
+        });
+        themePanel.addView(themeGroup);
+
+        LinearLayout receivePanel = panel(content, "接收设置");
         RadioGroup receiveFormatGroup = horizontalRadioGroup();
         receiveAsciiRadio = radio("ASCII");
         receiveHexRadio = radio("HEX");
         receiveFormatGroup.addView(receiveAsciiRadio);
         receiveFormatGroup.addView(receiveHexRadio);
         receiveAsciiRadio.setChecked(true);
-        content.addView(receiveFormatGroup);
+        receivePanel.addView(receiveFormatGroup);
 
         receiveLogModeBox = checkbox("按日志模式显示");
         receiveAutoLineBox = checkbox("接收区自动换行");
@@ -342,10 +401,10 @@ public class MainActivity extends Activity {
         receiveSaveBox = checkbox("接收保存到文件");
         receiveLogModeBox.setChecked(true);
         receiveAutoLineBox.setChecked(true);
-        content.addView(receiveLogModeBox);
-        content.addView(receiveAutoLineBox);
-        content.addView(receiveHiddenBox);
-        content.addView(receiveSaveBox);
+        receivePanel.addView(receiveLogModeBox);
+        receivePanel.addView(receiveAutoLineBox);
+        receivePanel.addView(receiveHiddenBox);
+        receivePanel.addView(receiveSaveBox);
 
         LinearLayout receiveActions = row();
         Button autoScrollButton = button("自动滚屏");
@@ -355,28 +414,29 @@ public class MainActivity extends Activity {
         receiveActions.addView(autoScrollButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         receiveActions.addView(clearReceiveButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         setRowMargins(receiveActions);
-        content.addView(receiveActions);
+        receivePanel.addView(receiveActions);
 
-        content.addView(panelTitle("发送设置"));
+        LinearLayout sendPanel = panel(content, "发送设置");
         RadioGroup sendFormatGroup = horizontalRadioGroup();
         sendAsciiRadio = radio("ASCII");
         sendHexRadio = radio("HEX");
         sendFormatGroup.addView(sendAsciiRadio);
         sendFormatGroup.addView(sendHexRadio);
         sendAsciiRadio.setChecked(true);
-        content.addView(sendFormatGroup);
+        sendPanel.addView(sendFormatGroup);
 
         sendEscapeBox = checkbox("自动解析转义符");
         sendAppendBox = checkbox("自动发送附加位");
         sendEscapeBox.setChecked(true);
-        content.addView(sendEscapeBox);
-        content.addView(sendAppendBox);
+        sendPanel.addView(sendEscapeBox);
+        sendPanel.addView(sendAppendBox);
 
         appendSummaryText = body(appendSettings.summary());
-        content.addView(appendSummaryText);
+        appendSummaryText.setTextColor(secondaryTextColor());
+        sendPanel.addView(appendSummaryText);
         Button appendSettingButton = button("附加位设置");
         appendSettingButton.setOnClickListener(v -> showAppendSettingsDialog());
-        content.addView(appendSettingButton, new LinearLayout.LayoutParams(
+        sendPanel.addView(appendSettingButton, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(48)
         ));
@@ -387,7 +447,7 @@ public class MainActivity extends Activity {
         intervalInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         autoRow.addView(autoSendBox, new LinearLayout.LayoutParams(0, dp(44), 1));
         autoRow.addView(intervalInput, new LinearLayout.LayoutParams(0, dp(44), 1));
-        content.addView(autoRow);
+        sendPanel.addView(autoRow);
 
         autoSendBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -409,25 +469,33 @@ public class MainActivity extends Activity {
     private View buildCommunicationPage() {
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(10), dp(8), dp(10), dp(10));
+        content.setPadding(dp(10), dp(10), dp(10), dp(10));
+        content.setBackgroundColor(appBackgroundColor());
 
+        LinearLayout monitorPanel = panel(content, "通信日志");
+        monitorPanel.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1
+        ));
         LinearLayout topRow = row();
         counterText = body("");
         cacheText = body("");
         topRow.addView(counterText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         topRow.addView(cacheText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        content.addView(topRow);
+        monitorPanel.addView(topRow);
 
         logScroll = new ScrollView(this);
         logScroll.setFillViewport(true);
         logText = body("");
-        logText.setTextColor(Color.rgb(18, 24, 30));
+        logText.setTextColor(logTextColor());
         logText.setTextSize(13);
+        logText.setTypeface(Typeface.MONOSPACE);
         logText.setGravity(Gravity.START | Gravity.TOP);
-        logText.setBackgroundColor(Color.WHITE);
+        logText.setBackgroundColor(logBackgroundColor());
         logText.setPadding(dp(10), dp(10), dp(10), dp(10));
         logScroll.addView(logText);
-        content.addView(logScroll, new LinearLayout.LayoutParams(
+        monitorPanel.addView(logScroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0,
                 1
@@ -448,13 +516,14 @@ public class MainActivity extends Activity {
         logActions.addView(copyLogButton, new LinearLayout.LayoutParams(0, dp(44), 1));
         logActions.addView(resetCounterButton, new LinearLayout.LayoutParams(0, dp(44), 1));
         setRowMargins(logActions);
-        content.addView(logActions);
+        monitorPanel.addView(logActions);
 
+        LinearLayout sendPanel = panel(content, "发送区");
         sendInput = edit("demo 7500", "发送内容");
         sendInput.setSingleLine(false);
         sendInput.setGravity(Gravity.TOP | Gravity.START);
         sendInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        content.addView(sendInput, new LinearLayout.LayoutParams(
+        sendPanel.addView(sendInput, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(96)
         ));
@@ -470,7 +539,7 @@ public class MainActivity extends Activity {
         sendRow.addView(clearSendButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         sendRow.addView(fileButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         setRowMargins(sendRow);
-        content.addView(sendRow);
+        sendPanel.addView(sendRow);
 
         historySpinner = spinner(new String[]{"历史发送"});
         Button quickStatusButton = button("快捷命令");
@@ -479,7 +548,21 @@ public class MainActivity extends Activity {
         historyRow.addView(historySpinner, new LinearLayout.LayoutParams(0, dp(48), 1));
         historyRow.addView(quickStatusButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         setRowMargins(historyRow);
-        content.addView(historyRow);
+        sendPanel.addView(historyRow);
+
+        LinearLayout commandPanel = panel(content, "自定义指令");
+        for (int i = 0; i < customCommandInputs.length; i++) {
+            LinearLayout commandRow = row();
+            EditText commandInput = edit(defaultCustomCommand(i), "指令 " + (i + 1));
+            customCommandInputs[i] = commandInput;
+            Button commandButton = button("发送" + (i + 1));
+            final int commandIndex = i;
+            commandButton.setOnClickListener(v -> sendCustomCommand(commandIndex));
+            commandRow.addView(commandInput, new LinearLayout.LayoutParams(0, dp(48), 1));
+            commandRow.addView(commandButton, new LinearLayout.LayoutParams(dp(84), dp(48)));
+            setRowMargins(commandRow);
+            commandPanel.addView(commandRow);
+        }
 
         historySpinner.setOnItemSelectedListener(new SimpleItemSelectedListener() {
             @Override
@@ -496,7 +579,11 @@ public class MainActivity extends Activity {
     private void addTab(String title, int index) {
         Button tab = button(title);
         tab.setOnClickListener(v -> showPage(index));
-        tabBar.addView(tab, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        tab.setGravity(Gravity.CENTER);
+        tabBar.addView(tab, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(72)
+        ));
     }
 
     private void showPage(int index) {
@@ -506,14 +593,62 @@ public class MainActivity extends Activity {
         communicationPage.setVisibility(index == 2 ? View.VISIBLE : View.GONE);
         for (int i = 0; i < tabBar.getChildCount(); i++) {
             View child = tabBar.getChildAt(i);
-            child.setBackgroundColor(i == index ? Color.rgb(33, 105, 184) : Color.rgb(229, 235, 242));
+            child.setBackgroundColor(i == index ? accentColor() : sidebarColor());
             if (child instanceof Button) {
-                ((Button) child).setTextColor(i == index ? Color.WHITE : Color.rgb(28, 38, 50));
+                ((Button) child).setTextColor(i == index ? Color.WHITE : secondaryTextColor());
             }
         }
         if (index == 2) {
             refreshLogDisplay();
         }
+    }
+
+    private void switchTheme(boolean selectedDark) {
+        if (darkTheme == selectedDark) {
+            return;
+        }
+        saveConfig();
+        darkTheme = selectedDark;
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putBoolean("dark_theme", darkTheme)
+                .apply();
+        buildUi();
+        reloadLocalHosts();
+        loadConfig();
+        updateModeUi();
+        updateCounters();
+        showPage(selectedPage);
+        refreshLogDisplay();
+    }
+
+    private void updateConnectionStatus(String detail) {
+        if (stateText == null) {
+            return;
+        }
+        int count = session.activeEndpointCount();
+        boolean running = session.isRunning();
+        boolean connected = count > 0;
+        String title;
+        if (!running) {
+            title = "未连接";
+        } else if (connected) {
+            title = "已连接";
+        } else {
+            title = "监听中";
+        }
+        stateText.setText(title + "  " + detail);
+        stateText.setTextColor(Color.WHITE);
+        if (connectedCountText != null) {
+            connectedCountText.setText("设备：" + count + " 台");
+            connectedCountText.setTextColor(Color.WHITE);
+        }
+        if (openButton != null) {
+            openButton.setText(running ? "关闭" : "打开");
+        }
+        View statusBox = (View) stateText.getParent();
+        statusBox.setBackground(box(connected ? connectedColor() : (running ? listeningColor() : disconnectedColor()),
+                connected ? connectedColor() : (running ? listeningColor() : disconnectedColor()), 2));
     }
 
     private void toggleSession() {
@@ -570,6 +705,33 @@ public class MainActivity extends Activity {
         rememberHistory(rawText);
         session.send(data, networkListener);
         appendSend(data);
+    }
+
+    private void sendCustomCommand(int index) {
+        if (index < 0 || index >= customCommandInputs.length || customCommandInputs[index] == null) {
+            return;
+        }
+        String command = customCommandInputs[index].getText().toString();
+        if (command.trim().length() == 0) {
+            Toast.makeText(this, "请先编辑自定义指令", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        sendInput.setText(command);
+        saveConfig();
+        sendCurrentPayload(true);
+    }
+
+    private String defaultCustomCommand(int index) {
+        switch (index) {
+            case 0:
+                return "{\"GetDevStatus\":{}}";
+            case 1:
+                return "demo 7500";
+            case 2:
+                return "AT";
+            default:
+                return "";
+        }
     }
 
     private void sendFile(Uri uri) {
@@ -666,6 +828,7 @@ public class MainActivity extends Activity {
         }
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
         editor.putBoolean("configured", true);
+        editor.putBoolean("dark_theme", darkTheme);
         editor.putInt("page", selectedPage);
         editor.putInt("mode", modeSpinner.getSelectedItemPosition());
         editor.putString("local_host", text(localHostInput, DEFAULT_BIND_HOST));
@@ -684,6 +847,11 @@ public class MainActivity extends Activity {
         editor.putBoolean("auto_send", autoSendBox.isChecked());
         editor.putString("auto_interval", text(intervalInput, "1000"));
         editor.putString("send_text", sendInput.getText().toString());
+        for (int i = 0; i < customCommandInputs.length; i++) {
+            if (customCommandInputs[i] != null) {
+                editor.putString("custom_command_" + i, customCommandInputs[i].getText().toString());
+            }
+        }
         editor.putInt("append_checksum", appendSettings.checksumMode);
         editor.putInt("append_tail", appendSettings.tailMode);
         editor.putInt("append_start", appendSettings.startOffset);
@@ -729,6 +897,13 @@ public class MainActivity extends Activity {
             autoSendBox.setChecked(prefs.getBoolean("auto_send", false));
             intervalInput.setText(prefs.getString("auto_interval", "1000"));
             sendInput.setText(prefs.getString("send_text", "demo 7500"));
+            for (int i = 0; i < customCommandInputs.length; i++) {
+                if (customCommandInputs[i] != null) {
+                    customCommandInputs[i].setText(prefs.getString("custom_command_" + i, defaultCustomCommand(i)));
+                }
+            }
+            lightThemeRadio.setChecked(!darkTheme);
+            darkThemeRadio.setChecked(darkTheme);
 
             appendSettings.checksumMode = boundIndex(prefs.getInt("append_checksum", 0), AppendSettings.CHECKSUM_NAMES.length);
             appendSettings.tailMode = boundIndex(prefs.getInt("append_tail", 1), AppendSettings.TAIL_NAMES.length);
@@ -875,11 +1050,11 @@ public class MainActivity extends Activity {
         udpBroadcastBox.setVisibility(udp ? View.VISIBLE : View.GONE);
 
         if (server) {
-            stateText.setText("TCP Server: 开发板连192.168.2.100时，手机WiFi也必须设置成192.168.2.100");
+            updateConnectionStatus("TCP Server 就绪");
         } else if (udp) {
-            stateText.setText("UDP: 选择本地地址/端口，同时填写远程地址/端口");
+            updateConnectionStatus("UDP 就绪");
         } else {
-            stateText.setText("TCP Client: 开发板是服务端时，在这里填开发板IP，例如192.168.2.100");
+            updateConnectionStatus("TCP Client 就绪");
         }
     }
 
@@ -1040,16 +1215,36 @@ public class MainActivity extends Activity {
         Toast.makeText(this, "已复制", Toast.LENGTH_SHORT).show();
     }
 
+    private LinearLayout panel(LinearLayout parent, String title) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(10), dp(7), dp(10), dp(10));
+        panel.setBackground(box(panelBackgroundColor(), borderColor(), 0));
+
+        TextView titleView = panelTitle(title);
+        panel.addView(titleView);
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, 0, 0, dp(10));
+        parent.addView(panel, params);
+        return panel;
+    }
+
     private ScrollView pageScroll() {
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
+        scrollView.setBackgroundColor(appBackgroundColor());
         return scrollView;
     }
 
     private LinearLayout pageContent(ScrollView scrollView) {
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(12), dp(10), dp(12), dp(20));
+        content.setPadding(dp(10), dp(10), dp(10), dp(20));
+        content.setBackgroundColor(appBackgroundColor());
         scrollView.addView(content);
         return content;
     }
@@ -1066,9 +1261,10 @@ public class MainActivity extends Activity {
     private TextView panelTitle(String text) {
         TextView view = new TextView(this);
         view.setText(text);
-        view.setTextSize(16);
-        view.setTextColor(Color.rgb(22, 32, 44));
-        view.setPadding(0, dp(12), 0, dp(6));
+        view.setTextSize(13);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        view.setTextColor(primaryTextColor());
+        view.setPadding(0, 0, 0, dp(8));
         return view;
     }
 
@@ -1076,6 +1272,7 @@ public class MainActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(text);
         view.setTextSize(14);
+        view.setTextColor(primaryTextColor());
         view.setPadding(0, dp(6), 0, dp(6));
         return view;
     }
@@ -1086,6 +1283,9 @@ public class MainActivity extends Activity {
         editText.setHint(hint);
         editText.setSingleLine(true);
         editText.setTextSize(14);
+        editText.setTextColor(primaryTextColor());
+        editText.setHintTextColor(mutedTextColor());
+        editText.setBackground(box(inputBackgroundColor(), borderColor(), 2));
         editText.setSelectAllOnFocus(false);
         editText.setPadding(dp(10), 0, dp(10), 0);
         return editText;
@@ -1093,16 +1293,35 @@ public class MainActivity extends Activity {
 
     private Spinner spinner(String[] values) {
         Spinner spinner = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, values);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, values) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                TextView view = (TextView) super.getView(position, convertView, parent);
+                view.setTextColor(primaryTextColor());
+                view.setTextSize(14);
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                TextView view = (TextView) super.getDropDownView(position, convertView, parent);
+                view.setTextColor(Color.rgb(30, 34, 40));
+                view.setTextSize(14);
+                return view;
+            }
+        };
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(adapter);
+        spinner.setBackground(box(inputBackgroundColor(), borderColor(), 2));
         return spinner;
     }
 
     private RadioButton radio(String text) {
         RadioButton radioButton = new RadioButton(this);
+        radioButton.setId(View.generateViewId());
         radioButton.setText(text);
         radioButton.setTextSize(14);
+        radioButton.setTextColor(primaryTextColor());
         return radioButton;
     }
 
@@ -1118,6 +1337,8 @@ public class MainActivity extends Activity {
         button.setText(text);
         button.setAllCaps(false);
         button.setTextSize(14);
+        button.setTextColor(Color.WHITE);
+        button.setBackground(box(accentColor(), accentColor(), 2));
         return button;
     }
 
@@ -1125,6 +1346,7 @@ public class MainActivity extends Activity {
         CheckBox checkBox = new CheckBox(this);
         checkBox.setText(text);
         checkBox.setTextSize(14);
+        checkBox.setTextColor(primaryTextColor());
         return checkBox;
     }
 
@@ -1132,7 +1354,7 @@ public class MainActivity extends Activity {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         TextView text = body(label);
-        text.setTextColor(Color.rgb(56, 68, 82));
+        text.setTextColor(secondaryTextColor());
         layout.addView(text);
         layout.addView(child, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
         return layout;
@@ -1156,6 +1378,78 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private GradientDrawable box(int fillColor, int strokeColor, int radiusDp) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fillColor);
+        drawable.setStroke(dp(1), strokeColor);
+        drawable.setCornerRadius(dp(radiusDp));
+        return drawable;
+    }
+
+    private int titleBarColor() {
+        return darkTheme ? Color.rgb(30, 30, 30) : Color.rgb(37, 37, 38);
+    }
+
+    private int titleTextColor() {
+        return Color.rgb(238, 238, 238);
+    }
+
+    private int sidebarColor() {
+        return darkTheme ? Color.rgb(37, 37, 38) : Color.rgb(235, 238, 242);
+    }
+
+    private int appBackgroundColor() {
+        return darkTheme ? Color.rgb(30, 30, 30) : Color.rgb(246, 248, 250);
+    }
+
+    private int panelBackgroundColor() {
+        return darkTheme ? Color.rgb(37, 37, 38) : Color.rgb(255, 255, 255);
+    }
+
+    private int inputBackgroundColor() {
+        return darkTheme ? Color.rgb(51, 51, 51) : Color.rgb(255, 255, 255);
+    }
+
+    private int logBackgroundColor() {
+        return Color.rgb(5, 10, 8);
+    }
+
+    private int primaryTextColor() {
+        return darkTheme ? Color.rgb(220, 220, 220) : Color.rgb(32, 38, 46);
+    }
+
+    private int secondaryTextColor() {
+        return darkTheme ? Color.rgb(185, 185, 185) : Color.rgb(72, 84, 98);
+    }
+
+    private int mutedTextColor() {
+        return darkTheme ? Color.rgb(130, 130, 130) : Color.rgb(132, 145, 160);
+    }
+
+    private int logTextColor() {
+        return Color.rgb(88, 255, 142);
+    }
+
+    private int borderColor() {
+        return darkTheme ? Color.rgb(65, 65, 65) : Color.rgb(214, 222, 232);
+    }
+
+    private int accentColor() {
+        return darkTheme ? Color.rgb(0, 122, 204) : Color.rgb(0, 120, 212);
+    }
+
+    private int connectedColor() {
+        return Color.rgb(30, 145, 80);
+    }
+
+    private int listeningColor() {
+        return Color.rgb(193, 126, 31);
+    }
+
+    private int disconnectedColor() {
+        return Color.rgb(173, 52, 62);
     }
 
     private abstract static class SimpleItemSelectedListener implements AdapterView.OnItemSelectedListener {

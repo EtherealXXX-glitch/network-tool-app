@@ -44,6 +44,24 @@ final class NetworkDebugSession {
         return running;
     }
 
+    int activeEndpointCount() {
+        synchronized (lock) {
+            if (tcpClientSocket != null && tcpClientSocket.isConnected() && !tcpClientSocket.isClosed()) {
+                return 1;
+            }
+            if (udpSocket != null && !udpSocket.isClosed()) {
+                return 1;
+            }
+            int count = 0;
+            for (Socket client : serverClients) {
+                if (client.isConnected() && !client.isClosed()) {
+                    count++;
+                }
+            }
+            return count;
+        }
+    }
+
     void openTcpClient(String host, int port, Listener listener) {
         int token = prepareOpen();
         executor.execute(() -> {
