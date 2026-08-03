@@ -20,6 +20,7 @@ import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -60,6 +61,8 @@ public class MainActivity extends Activity {
     private static final int PAGE_SETTINGS = 1;
     private static final int PAGE_COMMUNICATION = 2;
     private static final int DEFAULT_CUSTOM_COMMAND_COUNT = 3;
+    private static final int SWIPE_MIN_DISTANCE_DP = 72;
+    private static final int SWIPE_MAX_OFF_AXIS_DP = 96;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final NetworkDebugSession session = new NetworkDebugSession();
@@ -125,6 +128,8 @@ public class MainActivity extends Activity {
     private boolean restoringConfig;
     private boolean darkTheme;
     private boolean reloadingLocalHosts;
+    private float swipeStartX;
+    private float swipeStartY;
 
     private final NetworkDebugSession.Listener networkListener = new NetworkDebugSession.Listener() {
         @Override
@@ -248,6 +253,14 @@ public class MainActivity extends Activity {
         pageHost.addView(communicationPage);
 
         setContentView(rootLayout);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (handlePageSwipe(event)) {
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     private View buildConnectionPage() {
@@ -631,6 +644,49 @@ public class MainActivity extends Activity {
         if (index == PAGE_COMMUNICATION) {
             refreshLogDisplay();
         }
+    }
+
+    private boolean handlePageSwipe(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            swipeStartX = event.getX();
+            swipeStartY = event.getY();
+            return false;
+        }
+        if (event.getAction() != MotionEvent.ACTION_UP) {
+            return false;
+        }
+
+        float deltaX = event.getX() - swipeStartX;
+        float deltaY = event.getY() - swipeStartY;
+        if (Math.abs(deltaX) < dp(SWIPE_MIN_DISTANCE_DP) || Math.abs(deltaY) > dp(SWIPE_MAX_OFF_AXIS_DP)) {
+            return false;
+        }
+        showPage(nextPageForSwipe(deltaX < 0));
+        return true;
+    }
+
+    private int nextPageForSwipe(boolean leftSwipe) {
+        int position;
+        if (selectedPage == PAGE_CONNECTION) {
+            position = 0;
+        } else if (selectedPage == PAGE_COMMUNICATION) {
+            position = 1;
+        } else {
+            position = 2;
+        }
+        int nextPosition = leftSwipe ? position + 1 : position - 1;
+        if (nextPosition < 0) {
+            nextPosition = 2;
+        } else if (nextPosition > 2) {
+            nextPosition = 0;
+        }
+        if (nextPosition == 0) {
+            return PAGE_CONNECTION;
+        }
+        if (nextPosition == 1) {
+            return PAGE_COMMUNICATION;
+        }
+        return PAGE_SETTINGS;
     }
 
     private void switchTheme(boolean selectedDark) {
