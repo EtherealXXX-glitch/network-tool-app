@@ -23,6 +23,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -128,6 +129,7 @@ public class MainActivity extends Activity {
     private boolean restoringConfig;
     private boolean darkTheme;
     private boolean reloadingLocalHosts;
+    private boolean pageAnimating;
     private float swipeStartX;
     private float swipeStartY;
 
@@ -469,7 +471,7 @@ public class MainActivity extends Activity {
         themePanel.addView(themeGroup);
 
         LinearLayout aboutPanel = panel(content, "简介");
-        TextView aboutText = body("版本：V2.0.2\n作者：EtherealXXX-glitch");
+        TextView aboutText = body("版本：V3.0\n作者：EtherealXXX-glitch");
         aboutText.setTextColor(primaryTextColor());
         aboutPanel.addView(aboutText);
 
@@ -628,10 +630,90 @@ public class MainActivity extends Activity {
     }
 
     private void showPage(int index) {
+        pageAnimating = false;
         selectedPage = index;
+        connectionPage.animate().cancel();
+        settingsPage.animate().cancel();
+        communicationPage.animate().cancel();
+        connectionPage.setTranslationX(0f);
+        settingsPage.setTranslationX(0f);
+        communicationPage.setTranslationX(0f);
+        connectionPage.setAlpha(1f);
+        settingsPage.setAlpha(1f);
+        communicationPage.setAlpha(1f);
         connectionPage.setVisibility(index == PAGE_CONNECTION ? View.VISIBLE : View.GONE);
         settingsPage.setVisibility(index == PAGE_SETTINGS ? View.VISIBLE : View.GONE);
         communicationPage.setVisibility(index == PAGE_COMMUNICATION ? View.VISIBLE : View.GONE);
+        updateTabState(index);
+        if (index == PAGE_COMMUNICATION) {
+            refreshLogDisplay();
+        }
+    }
+
+    private void showPageAnimated(int index, boolean leftSwipe) {
+        if (pageAnimating || index == selectedPage) {
+            return;
+        }
+        View current = pageForIndex(selectedPage);
+        View next = pageForIndex(index);
+        if (current == null || next == null) {
+            showPage(index);
+            return;
+        }
+
+        int width = pageHost.getWidth() > 0 ? pageHost.getWidth() : getResources().getDisplayMetrics().widthPixels;
+        float incomingX = leftSwipe ? width : -width;
+        float outgoingX = leftSwipe ? -width : width;
+
+        pageAnimating = true;
+        selectedPage = index;
+        updateTabState(index);
+        if (index == PAGE_COMMUNICATION) {
+            refreshLogDisplay();
+        }
+
+        current.animate().cancel();
+        next.animate().cancel();
+        next.setVisibility(View.VISIBLE);
+        next.setAlpha(0.86f);
+        next.setTranslationX(incomingX);
+        next.bringToFront();
+
+        AccelerateDecelerateInterpolator interpolator = new AccelerateDecelerateInterpolator();
+        current.animate()
+                .translationX(outgoingX)
+                .alpha(0.72f)
+                .setDuration(240)
+                .setInterpolator(interpolator)
+                .start();
+        next.animate()
+                .translationX(0f)
+                .alpha(1f)
+                .setDuration(240)
+                .setInterpolator(interpolator)
+                .withEndAction(() -> {
+                    current.setVisibility(View.GONE);
+                    current.setTranslationX(0f);
+                    current.setAlpha(1f);
+                    pageAnimating = false;
+                })
+                .start();
+    }
+
+    private View pageForIndex(int index) {
+        if (index == PAGE_CONNECTION) {
+            return connectionPage;
+        }
+        if (index == PAGE_SETTINGS) {
+            return settingsPage;
+        }
+        if (index == PAGE_COMMUNICATION) {
+            return communicationPage;
+        }
+        return null;
+    }
+
+    private void updateTabState(int index) {
         for (int i = 0; i < tabBar.getChildCount(); i++) {
             View child = tabBar.getChildAt(i);
             Object pageIndex = child.getTag();
@@ -641,12 +723,12 @@ public class MainActivity extends Activity {
                 ((Button) child).setTextColor(selected ? Color.WHITE : secondaryTextColor());
             }
         }
-        if (index == PAGE_COMMUNICATION) {
-            refreshLogDisplay();
-        }
     }
 
     private boolean handlePageSwipe(MotionEvent event) {
+        if (pageAnimating) {
+            return false;
+        }
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             swipeStartX = event.getX();
             swipeStartY = event.getY();
@@ -661,7 +743,8 @@ public class MainActivity extends Activity {
         if (Math.abs(deltaX) < dp(SWIPE_MIN_DISTANCE_DP) || Math.abs(deltaY) > dp(SWIPE_MAX_OFF_AXIS_DP)) {
             return false;
         }
-        showPage(nextPageForSwipe(deltaX < 0));
+        boolean leftSwipe = deltaX < 0;
+        showPageAnimated(nextPageForSwipe(leftSwipe), leftSwipe);
         return true;
     }
 
