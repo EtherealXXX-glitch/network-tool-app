@@ -54,6 +54,9 @@ public class MainActivity extends Activity {
     private static final String DEFAULT_PORT = "8866";
     private static final int AUTO_SEND_MIN_MS = 50;
     private static final String PREFS_NAME = "netassist_config_blank_defaults";
+    private static final int PAGE_CONNECTION = 0;
+    private static final int PAGE_SETTINGS = 1;
+    private static final int PAGE_COMMUNICATION = 2;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final NetworkDebugSession session = new NetworkDebugSession();
@@ -220,9 +223,9 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(48)
         ));
-        addTab("连接设置", 0);
-        addTab("通信", 2);
-        addTab("设置", 1);
+        addTab("连接设置", PAGE_CONNECTION);
+        addTab("通信", PAGE_COMMUNICATION);
+        addTab("设置", PAGE_SETTINGS);
 
         pageHost = new FrameLayout(this);
         pageHost.setBackgroundColor(appBackgroundColor());
@@ -476,13 +479,15 @@ public class MainActivity extends Activity {
 
         logScroll = new ScrollView(this);
         logScroll.setFillViewport(true);
+        logScroll.setBackground(box(logBackgroundColor(), terminalBorderColor(), 2));
         logText = body("");
         logText.setTextColor(logTextColor());
-        logText.setTextSize(13);
+        logText.setTextSize(12);
         logText.setTypeface(Typeface.MONOSPACE);
         logText.setGravity(Gravity.START | Gravity.TOP);
         logText.setBackgroundColor(logBackgroundColor());
-        logText.setPadding(dp(10), dp(10), dp(10), dp(10));
+        logText.setLineSpacing(dp(2), 1.0f);
+        logText.setPadding(dp(12), dp(12), dp(12), dp(12));
         logScroll.addView(logText);
         monitorPanel.addView(logScroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -567,6 +572,7 @@ public class MainActivity extends Activity {
 
     private void addTab(String title, int index) {
         Button tab = button(title);
+        tab.setTag(index);
         tab.setOnClickListener(v -> showPage(index));
         tab.setGravity(Gravity.CENTER);
         tabBar.addView(tab, new LinearLayout.LayoutParams(
@@ -578,17 +584,19 @@ public class MainActivity extends Activity {
 
     private void showPage(int index) {
         selectedPage = index;
-        connectionPage.setVisibility(index == 0 ? View.VISIBLE : View.GONE);
-        settingsPage.setVisibility(index == 1 ? View.VISIBLE : View.GONE);
-        communicationPage.setVisibility(index == 2 ? View.VISIBLE : View.GONE);
+        connectionPage.setVisibility(index == PAGE_CONNECTION ? View.VISIBLE : View.GONE);
+        settingsPage.setVisibility(index == PAGE_SETTINGS ? View.VISIBLE : View.GONE);
+        communicationPage.setVisibility(index == PAGE_COMMUNICATION ? View.VISIBLE : View.GONE);
         for (int i = 0; i < tabBar.getChildCount(); i++) {
             View child = tabBar.getChildAt(i);
-            child.setBackgroundColor(i == index ? accentColor() : sidebarColor());
+            Object pageIndex = child.getTag();
+            boolean selected = pageIndex instanceof Integer && ((Integer) pageIndex) == index;
+            child.setBackgroundColor(selected ? accentColor() : sidebarColor());
             if (child instanceof Button) {
-                ((Button) child).setTextColor(i == index ? Color.WHITE : secondaryTextColor());
+                ((Button) child).setTextColor(selected ? Color.WHITE : secondaryTextColor());
             }
         }
-        if (index == 2) {
+        if (index == PAGE_COMMUNICATION) {
             refreshLogDisplay();
         }
     }
@@ -1404,7 +1412,7 @@ public class MainActivity extends Activity {
     }
 
     private int logBackgroundColor() {
-        return Color.rgb(5, 10, 8);
+        return Color.rgb(13, 17, 23);
     }
 
     private int primaryTextColor() {
@@ -1420,7 +1428,11 @@ public class MainActivity extends Activity {
     }
 
     private int logTextColor() {
-        return Color.rgb(88, 255, 142);
+        return Color.rgb(203, 213, 225);
+    }
+
+    private int terminalBorderColor() {
+        return Color.rgb(48, 54, 61);
     }
 
     private int borderColor() {
