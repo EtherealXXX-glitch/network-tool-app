@@ -12,6 +12,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -201,6 +202,8 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
+        applySystemBars();
+
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setBackgroundColor(appBackgroundColor());
@@ -363,8 +366,8 @@ public class MainActivity extends Activity {
 
         LinearLayout themePanel = panel(content, "界面设置");
         RadioGroup themeGroup = horizontalRadioGroup();
-        lightThemeRadio = radio("浅色分格");
-        darkThemeRadio = radio("深色分格");
+        lightThemeRadio = radio("明亮主题");
+        darkThemeRadio = radio("黑色主题");
         themeGroup.addView(lightThemeRadio);
         themeGroup.addView(darkThemeRadio);
         if (darkTheme) {
@@ -1214,6 +1217,20 @@ public class MainActivity extends Activity {
         Toast.makeText(this, "已复制", Toast.LENGTH_SHORT).show();
     }
 
+    private void applySystemBars() {
+        getWindow().setStatusBarColor(titleBarColor());
+        getWindow().setNavigationBarColor(appBackgroundColor());
+
+        int flags = 0;
+        if (!darkTheme) {
+            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+        }
+        getWindow().getDecorView().setSystemUiVisibility(flags);
+    }
+
     private LinearLayout panel(LinearLayout parent, String title) {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -1388,31 +1405,31 @@ public class MainActivity extends Activity {
     }
 
     private int titleBarColor() {
-        return darkTheme ? Color.rgb(30, 30, 30) : Color.rgb(37, 37, 38);
+        return darkTheme ? Color.rgb(24, 24, 27) : Color.rgb(255, 255, 255);
     }
 
     private int titleTextColor() {
-        return Color.rgb(238, 238, 238);
+        return darkTheme ? Color.rgb(244, 244, 245) : Color.rgb(24, 24, 27);
     }
 
     private int sidebarColor() {
-        return darkTheme ? Color.rgb(37, 37, 38) : Color.rgb(235, 238, 242);
+        return darkTheme ? Color.rgb(32, 32, 36) : Color.rgb(241, 245, 249);
     }
 
     private int appBackgroundColor() {
-        return darkTheme ? Color.rgb(30, 30, 30) : Color.rgb(246, 248, 250);
+        return darkTheme ? Color.rgb(18, 18, 20) : Color.rgb(248, 250, 252);
     }
 
     private int panelBackgroundColor() {
-        return darkTheme ? Color.rgb(37, 37, 38) : Color.rgb(255, 255, 255);
+        return darkTheme ? Color.rgb(28, 28, 32) : Color.rgb(255, 255, 255);
     }
 
     private int inputBackgroundColor() {
-        return darkTheme ? Color.rgb(51, 51, 51) : Color.rgb(255, 255, 255);
+        return darkTheme ? Color.rgb(38, 38, 42) : Color.rgb(255, 255, 255);
     }
 
     private int logBackgroundColor() {
-        return Color.rgb(13, 17, 23);
+        return darkTheme ? Color.rgb(13, 17, 23) : Color.rgb(248, 250, 252);
     }
 
     private int primaryTextColor() {
@@ -1428,15 +1445,15 @@ public class MainActivity extends Activity {
     }
 
     private int logTextColor() {
-        return Color.rgb(203, 213, 225);
+        return darkTheme ? Color.rgb(203, 213, 225) : Color.rgb(30, 41, 59);
     }
 
     private int terminalBorderColor() {
-        return Color.rgb(48, 54, 61);
+        return darkTheme ? Color.rgb(48, 54, 61) : Color.rgb(203, 213, 225);
     }
 
     private int borderColor() {
-        return darkTheme ? Color.rgb(65, 65, 65) : Color.rgb(214, 222, 232);
+        return darkTheme ? Color.rgb(58, 58, 64) : Color.rgb(226, 232, 240);
     }
 
     private int accentColor() {
