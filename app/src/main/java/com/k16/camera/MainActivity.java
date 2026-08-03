@@ -217,7 +217,7 @@ public class MainActivity extends Activity {
         topSpacer.setBackgroundColor(appBackgroundColor());
         rootLayout.addView(topSpacer, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(18)
+                dp(63)
         ));
 
         tabBar = new LinearLayout(this);
