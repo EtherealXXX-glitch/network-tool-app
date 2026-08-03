@@ -213,15 +213,11 @@ public class MainActivity extends Activity {
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setBackgroundColor(appBackgroundColor());
 
-        TextView appBar = title("网络调试助手 V2.0.2");
-        appBar.setBackgroundColor(titleBarColor());
-        appBar.setTextColor(titleTextColor());
-        appBar.setTextSize(16);
-        appBar.setTypeface(Typeface.DEFAULT_BOLD);
-        appBar.setPadding(dp(14), dp(9), dp(14), dp(8));
-        rootLayout.addView(appBar, new LinearLayout.LayoutParams(
+        View topSpacer = new View(this);
+        topSpacer.setBackgroundColor(appBackgroundColor());
+        rootLayout.addView(topSpacer, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(42)
+                dp(18)
         ));
 
         tabBar = new LinearLayout(this);
@@ -459,7 +455,7 @@ public class MainActivity extends Activity {
         themePanel.addView(themeGroup);
 
         LinearLayout aboutPanel = panel(content, "简介");
-        TextView aboutText = body("网络调试助手 V2.0.2\n作者：EtherealXXX-glitch");
+        TextView aboutText = body("版本：V2.0.2\n作者：EtherealXXX-glitch");
         aboutText.setTextColor(primaryTextColor());
         aboutPanel.addView(aboutText);
 
@@ -763,16 +759,23 @@ public class MainActivity extends Activity {
             return;
         }
         int index = customCommandInputs.size();
-        LinearLayout commandRow = row();
+        LinearLayout commandBlock = new LinearLayout(this);
+        commandBlock.setOrientation(LinearLayout.VERTICAL);
+        commandBlock.setPadding(0, dp(4), 0, dp(8));
         EditText commandInput = edit(value, "指令 " + (index + 1));
         customCommandInputs.add(commandInput);
-        Button commandButton = button("发送");
+        Button commandButton = button("发送这条指令");
         final int commandIndex = index;
         commandButton.setOnClickListener(v -> sendCustomCommand(commandIndex));
-        commandRow.addView(commandInput, new LinearLayout.LayoutParams(0, dp(48), 1));
-        commandRow.addView(commandButton, new LinearLayout.LayoutParams(dp(72), dp(48)));
-        setRowMargins(commandRow);
-        customCommandList.addView(commandRow);
+        commandBlock.addView(commandInput, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(48)
+        ));
+        commandBlock.addView(commandButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(44)
+        ));
+        customCommandList.addView(commandBlock);
     }
 
     private void updateSendModeUi() {
