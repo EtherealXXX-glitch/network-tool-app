@@ -58,6 +58,7 @@ public class MainActivity extends Activity {
     private static final int PAGE_CONNECTION = 0;
     private static final int PAGE_SETTINGS = 1;
     private static final int PAGE_COMMUNICATION = 2;
+    private static final int DEFAULT_CUSTOM_COMMAND_COUNT = 3;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final NetworkDebugSession session = new NetworkDebugSession();
@@ -94,7 +95,11 @@ public class MainActivity extends Activity {
     private TextView cacheText;
     private RadioButton lightThemeRadio;
     private RadioButton darkThemeRadio;
-    private final EditText[] customCommandInputs = new EditText[4];
+    private Spinner sendModeSpinner;
+    private LinearLayout manualSendPanel;
+    private LinearLayout customCommandPanel;
+    private LinearLayout customCommandList;
+    private final List<EditText> customCommandInputs = new ArrayList<>();
     private ScrollView logScroll;
     private Button openButton;
 
@@ -359,31 +364,6 @@ public class MainActivity extends Activity {
         ScrollView scrollView = pageScroll();
         LinearLayout content = pageContent(scrollView);
 
-        LinearLayout aboutPanel = panel(content, "简介");
-        TextView aboutText = body("网络调试助手 V2.0.2\n作者：EtherealXXX-glitch");
-        aboutText.setTextColor(primaryTextColor());
-        aboutPanel.addView(aboutText);
-
-        LinearLayout themePanel = panel(content, "界面设置");
-        RadioGroup themeGroup = horizontalRadioGroup();
-        lightThemeRadio = radio("明亮主题");
-        darkThemeRadio = radio("黑色主题");
-        themeGroup.addView(lightThemeRadio);
-        themeGroup.addView(darkThemeRadio);
-        if (darkTheme) {
-            darkThemeRadio.setChecked(true);
-        } else {
-            lightThemeRadio.setChecked(true);
-        }
-        themeGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            if (restoringConfig) {
-                return;
-            }
-            boolean selectedDark = checkedId == darkThemeRadio.getId();
-            switchTheme(selectedDark);
-        });
-        themePanel.addView(themeGroup);
-
         LinearLayout receivePanel = panel(content, "接收设置");
         RadioGroup receiveFormatGroup = horizontalRadioGroup();
         receiveAsciiRadio = radio("ASCII");
@@ -458,6 +438,31 @@ public class MainActivity extends Activity {
             }
         });
 
+        LinearLayout themePanel = panel(content, "界面设置");
+        RadioGroup themeGroup = horizontalRadioGroup();
+        lightThemeRadio = radio("明亮主题");
+        darkThemeRadio = radio("黑色主题");
+        themeGroup.addView(lightThemeRadio);
+        themeGroup.addView(darkThemeRadio);
+        if (darkTheme) {
+            darkThemeRadio.setChecked(true);
+        } else {
+            lightThemeRadio.setChecked(true);
+        }
+        themeGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (restoringConfig) {
+                return;
+            }
+            boolean selectedDark = checkedId == darkThemeRadio.getId();
+            switchTheme(selectedDark);
+        });
+        themePanel.addView(themeGroup);
+
+        LinearLayout aboutPanel = panel(content, "简介");
+        TextView aboutText = body("网络调试助手 V2.0.2\n作者：EtherealXXX-glitch");
+        aboutText.setTextColor(primaryTextColor());
+        aboutPanel.addView(aboutText);
+
         return scrollView;
     }
 
@@ -466,6 +471,7 @@ public class MainActivity extends Activity {
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(10), dp(10), dp(10), dp(10));
         content.setBackgroundColor(appBackgroundColor());
+        customCommandInputs.clear();
 
         LinearLayout monitorPanel = panel(content, "通信日志");
         monitorPanel.setLayoutParams(new LinearLayout.LayoutParams(
@@ -515,12 +521,34 @@ public class MainActivity extends Activity {
         setRowMargins(logActions);
         monitorPanel.addView(logActions);
 
-        LinearLayout sendPanel = panel(content, "发送区");
+        ScrollView sendScroll = new ScrollView(this);
+        sendScroll.setFillViewport(true);
+        sendScroll.setBackgroundColor(appBackgroundColor());
+        LinearLayout sendContent = new LinearLayout(this);
+        sendContent.setOrientation(LinearLayout.VERTICAL);
+        sendScroll.addView(sendContent);
+        content.addView(sendScroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1
+        ));
+
+        LinearLayout modePanel = panel(sendContent, "发送模式");
+        sendModeSpinner = spinner(new String[]{"手动输入", "自定义指令"});
+        sendModeSpinner.setOnItemSelectedListener(new SimpleItemSelectedListener() {
+            @Override
+            public void onItemSelected() {
+                updateSendModeUi();
+            }
+        });
+        modePanel.addView(labeled("选择发送来源", sendModeSpinner));
+
+        manualSendPanel = panel(sendContent, "手动输入");
         sendInput = edit("", "发送内容");
         sendInput.setSingleLine(false);
         sendInput.setGravity(Gravity.TOP | Gravity.START);
         sendInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        sendPanel.addView(sendInput, new LinearLayout.LayoutParams(
+        manualSendPanel.addView(sendInput, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(96)
         ));
@@ -536,7 +564,7 @@ public class MainActivity extends Activity {
         sendRow.addView(clearSendButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         sendRow.addView(fileButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         setRowMargins(sendRow);
-        sendPanel.addView(sendRow);
+        manualSendPanel.addView(sendRow);
 
         historySpinner = spinner(new String[]{"历史发送"});
         Button quickStatusButton = button("快捷命令");
@@ -545,21 +573,25 @@ public class MainActivity extends Activity {
         historyRow.addView(historySpinner, new LinearLayout.LayoutParams(0, dp(48), 1));
         historyRow.addView(quickStatusButton, new LinearLayout.LayoutParams(0, dp(48), 1));
         setRowMargins(historyRow);
-        sendPanel.addView(historyRow);
+        manualSendPanel.addView(historyRow);
 
-        LinearLayout commandPanel = panel(content, "自定义指令");
-        for (int i = 0; i < customCommandInputs.length; i++) {
-            LinearLayout commandRow = row();
-            EditText commandInput = edit(defaultCustomCommand(i), "指令 " + (i + 1));
-            customCommandInputs[i] = commandInput;
-            Button commandButton = button("发送" + (i + 1));
-            final int commandIndex = i;
-            commandButton.setOnClickListener(v -> sendCustomCommand(commandIndex));
-            commandRow.addView(commandInput, new LinearLayout.LayoutParams(0, dp(48), 1));
-            commandRow.addView(commandButton, new LinearLayout.LayoutParams(dp(84), dp(48)));
-            setRowMargins(commandRow);
-            commandPanel.addView(commandRow);
+        customCommandPanel = panel(sendContent, "自定义指令");
+        customCommandList = new LinearLayout(this);
+        customCommandList.setOrientation(LinearLayout.VERTICAL);
+        customCommandPanel.addView(customCommandList);
+        for (int i = 0; i < DEFAULT_CUSTOM_COMMAND_COUNT; i++) {
+            addCustomCommandRow("");
         }
+        Button addCommandButton = button("添加指令");
+        addCommandButton.setOnClickListener(v -> {
+            addCustomCommandRow("");
+            saveConfig();
+        });
+        customCommandPanel.addView(addCommandButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(48)
+        ));
+        updateSendModeUi();
 
         historySpinner.setOnItemSelectedListener(new SimpleItemSelectedListener() {
             @Override
@@ -709,10 +741,10 @@ public class MainActivity extends Activity {
     }
 
     private void sendCustomCommand(int index) {
-        if (index < 0 || index >= customCommandInputs.length || customCommandInputs[index] == null) {
+        if (index < 0 || index >= customCommandInputs.size() || customCommandInputs.get(index) == null) {
             return;
         }
-        String command = customCommandInputs[index].getText().toString();
+        String command = customCommandInputs.get(index).getText().toString();
         if (command.trim().length() == 0) {
             Toast.makeText(this, "请先编辑自定义指令", Toast.LENGTH_SHORT).show();
             return;
@@ -724,6 +756,32 @@ public class MainActivity extends Activity {
 
     private String defaultCustomCommand(int index) {
         return "";
+    }
+
+    private void addCustomCommandRow(String value) {
+        if (customCommandList == null) {
+            return;
+        }
+        int index = customCommandInputs.size();
+        LinearLayout commandRow = row();
+        EditText commandInput = edit(value, "指令 " + (index + 1));
+        customCommandInputs.add(commandInput);
+        Button commandButton = button("发送");
+        final int commandIndex = index;
+        commandButton.setOnClickListener(v -> sendCustomCommand(commandIndex));
+        commandRow.addView(commandInput, new LinearLayout.LayoutParams(0, dp(48), 1));
+        commandRow.addView(commandButton, new LinearLayout.LayoutParams(dp(72), dp(48)));
+        setRowMargins(commandRow);
+        customCommandList.addView(commandRow);
+    }
+
+    private void updateSendModeUi() {
+        if (sendModeSpinner == null || manualSendPanel == null || customCommandPanel == null) {
+            return;
+        }
+        boolean customMode = sendModeSpinner.getSelectedItemPosition() == 1;
+        manualSendPanel.setVisibility(customMode ? View.GONE : View.VISIBLE);
+        customCommandPanel.setVisibility(customMode ? View.VISIBLE : View.GONE);
     }
 
     private void sendFile(Uri uri) {
@@ -839,9 +897,13 @@ public class MainActivity extends Activity {
         editor.putBoolean("auto_send", autoSendBox.isChecked());
         editor.putString("auto_interval", rawText(intervalInput));
         editor.putString("send_text", sendInput.getText().toString());
-        for (int i = 0; i < customCommandInputs.length; i++) {
-            if (customCommandInputs[i] != null) {
-                editor.putString("custom_command_" + i, customCommandInputs[i].getText().toString());
+        if (sendModeSpinner != null) {
+            editor.putInt("send_mode", sendModeSpinner.getSelectedItemPosition());
+        }
+        editor.putInt("custom_command_count", customCommandInputs.size());
+        for (int i = 0; i < customCommandInputs.size(); i++) {
+            if (customCommandInputs.get(i) != null) {
+                editor.putString("custom_command_" + i, customCommandInputs.get(i).getText().toString());
             }
         }
         editor.putInt("append_checksum", appendSettings.checksumMode);
@@ -889,11 +951,17 @@ public class MainActivity extends Activity {
             autoSendBox.setChecked(prefs.getBoolean("auto_send", false));
             intervalInput.setText(prefs.getString("auto_interval", ""));
             sendInput.setText(prefs.getString("send_text", ""));
-            for (int i = 0; i < customCommandInputs.length; i++) {
-                if (customCommandInputs[i] != null) {
-                    customCommandInputs[i].setText(prefs.getString("custom_command_" + i, defaultCustomCommand(i)));
-                }
+            if (sendModeSpinner != null) {
+                sendModeSpinner.setSelection(boundIndex(prefs.getInt("send_mode", 0), sendModeSpinner.getCount()));
             }
+            int commandCount = Math.max(DEFAULT_CUSTOM_COMMAND_COUNT, prefs.getInt("custom_command_count", DEFAULT_CUSTOM_COMMAND_COUNT));
+            while (customCommandInputs.size() < commandCount) {
+                addCustomCommandRow("");
+            }
+            for (int i = 0; i < customCommandInputs.size(); i++) {
+                customCommandInputs.get(i).setText(prefs.getString("custom_command_" + i, defaultCustomCommand(i)));
+            }
+            updateSendModeUi();
             lightThemeRadio.setChecked(!darkTheme);
             darkThemeRadio.setChecked(darkTheme);
 
@@ -1279,7 +1347,7 @@ public class MainActivity extends Activity {
         view.setText(text);
         view.setTextSize(13);
         view.setTypeface(Typeface.DEFAULT_BOLD);
-        view.setTextColor(primaryTextColor());
+        view.setTextColor(panelTitleColor());
         view.setPadding(0, 0, 0, dp(8));
         return view;
     }
@@ -1405,59 +1473,63 @@ public class MainActivity extends Activity {
     }
 
     private int titleBarColor() {
-        return darkTheme ? Color.rgb(24, 24, 27) : Color.rgb(255, 255, 255);
+        return darkTheme ? Color.rgb(8, 15, 24) : Color.rgb(250, 252, 255);
     }
 
     private int titleTextColor() {
-        return darkTheme ? Color.rgb(244, 244, 245) : Color.rgb(24, 24, 27);
+        return darkTheme ? Color.rgb(238, 246, 255) : Color.rgb(17, 32, 48);
     }
 
     private int sidebarColor() {
-        return darkTheme ? Color.rgb(32, 32, 36) : Color.rgb(241, 245, 249);
+        return darkTheme ? Color.rgb(14, 25, 38) : Color.rgb(225, 235, 245);
     }
 
     private int appBackgroundColor() {
-        return darkTheme ? Color.rgb(18, 18, 20) : Color.rgb(248, 250, 252);
+        return darkTheme ? Color.rgb(10, 18, 28) : Color.rgb(238, 244, 250);
     }
 
     private int panelBackgroundColor() {
-        return darkTheme ? Color.rgb(28, 28, 32) : Color.rgb(255, 255, 255);
+        return darkTheme ? Color.rgb(18, 30, 44) : Color.rgb(255, 255, 255);
     }
 
     private int inputBackgroundColor() {
-        return darkTheme ? Color.rgb(38, 38, 42) : Color.rgb(255, 255, 255);
+        return darkTheme ? Color.rgb(11, 22, 34) : Color.rgb(248, 251, 254);
     }
 
     private int logBackgroundColor() {
-        return darkTheme ? Color.rgb(13, 17, 23) : Color.rgb(248, 250, 252);
+        return darkTheme ? Color.rgb(6, 13, 20) : Color.rgb(247, 250, 253);
     }
 
     private int primaryTextColor() {
-        return darkTheme ? Color.rgb(220, 220, 220) : Color.rgb(32, 38, 46);
+        return darkTheme ? Color.rgb(231, 239, 247) : Color.rgb(20, 35, 52);
     }
 
     private int secondaryTextColor() {
-        return darkTheme ? Color.rgb(185, 185, 185) : Color.rgb(72, 84, 98);
+        return darkTheme ? Color.rgb(169, 187, 202) : Color.rgb(74, 91, 108);
     }
 
     private int mutedTextColor() {
-        return darkTheme ? Color.rgb(130, 130, 130) : Color.rgb(132, 145, 160);
+        return darkTheme ? Color.rgb(114, 137, 157) : Color.rgb(125, 143, 160);
     }
 
     private int logTextColor() {
-        return darkTheme ? Color.rgb(203, 213, 225) : Color.rgb(30, 41, 59);
+        return darkTheme ? Color.rgb(202, 219, 232) : Color.rgb(31, 48, 66);
     }
 
     private int terminalBorderColor() {
-        return darkTheme ? Color.rgb(48, 54, 61) : Color.rgb(203, 213, 225);
+        return darkTheme ? Color.rgb(49, 79, 103) : Color.rgb(178, 194, 211);
     }
 
     private int borderColor() {
-        return darkTheme ? Color.rgb(58, 58, 64) : Color.rgb(226, 232, 240);
+        return darkTheme ? Color.rgb(52, 76, 98) : Color.rgb(186, 203, 220);
     }
 
     private int accentColor() {
-        return darkTheme ? Color.rgb(0, 122, 204) : Color.rgb(0, 120, 212);
+        return darkTheme ? Color.rgb(20, 151, 176) : Color.rgb(18, 116, 150);
+    }
+
+    private int panelTitleColor() {
+        return darkTheme ? Color.rgb(120, 213, 232) : Color.rgb(17, 92, 122);
     }
 
     private int connectedColor() {
