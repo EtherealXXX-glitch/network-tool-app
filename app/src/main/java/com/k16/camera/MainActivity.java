@@ -7,6 +7,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -1148,9 +1149,7 @@ public class MainActivity extends Activity {
         if (localHostSpinner != null) {
             String currentHostText = localHostInput == null ? "" : localHostInput.getText().toString();
             reloadingLocalHosts = true;
-            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, hosts);
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            localHostSpinner.setAdapter(adapter);
+            localHostSpinner.setAdapter(spinnerAdapter(hosts));
             reloadingLocalHosts = false;
             if (localHostInput != null) {
                 localHostInput.setText(currentHostText);
@@ -1175,9 +1174,7 @@ public class MainActivity extends Activity {
         List<String> items = new ArrayList<>();
         items.add("历史发送");
         items.addAll(sendHistory);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, items);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        historySpinner.setAdapter(adapter);
+        historySpinner.setAdapter(spinnerAdapter(items));
     }
 
     private byte[] readUri(Uri uri) throws IOException {
@@ -1380,11 +1377,42 @@ public class MainActivity extends Activity {
 
     private Spinner spinner(String[] values) {
         Spinner spinner = new Spinner(this);
+        spinner.setAdapter(spinnerAdapter(values));
+        spinner.setBackground(box(inputBackgroundColor(), borderColor(), 2));
+        return spinner;
+    }
+
+    private ArrayAdapter<String> spinnerAdapter(String[] values) {
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, values) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
                 TextView view = (TextView) super.getView(position, convertView, parent);
                 view.setTextColor(primaryTextColor());
+                view.setTextSize(14);
+                view.setBackgroundColor(inputBackgroundColor());
+                return view;
+            }
+
+            @Override
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                TextView view = (TextView) super.getDropDownView(position, convertView, parent);
+                view.setTextColor(primaryTextColor());
+                view.setBackgroundColor(panelBackgroundColor());
+                view.setTextSize(14);
+                return view;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        return adapter;
+    }
+
+    private ArrayAdapter<String> spinnerAdapter(List<String> values) {
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, values) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                TextView view = (TextView) super.getView(position, convertView, parent);
+                view.setTextColor(primaryTextColor());
+                view.setBackgroundColor(inputBackgroundColor());
                 view.setTextSize(14);
                 return view;
             }
@@ -1392,15 +1420,14 @@ public class MainActivity extends Activity {
             @Override
             public View getDropDownView(int position, View convertView, ViewGroup parent) {
                 TextView view = (TextView) super.getDropDownView(position, convertView, parent);
-                view.setTextColor(Color.rgb(30, 34, 40));
+                view.setTextColor(primaryTextColor());
+                view.setBackgroundColor(panelBackgroundColor());
                 view.setTextSize(14);
                 return view;
             }
         };
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinner.setAdapter(adapter);
-        spinner.setBackground(box(inputBackgroundColor(), borderColor(), 2));
-        return spinner;
+        return adapter;
     }
 
     private RadioButton radio(String text) {
@@ -1409,6 +1436,7 @@ public class MainActivity extends Activity {
         radioButton.setText(text);
         radioButton.setTextSize(14);
         radioButton.setTextColor(primaryTextColor());
+        radioButton.setButtonTintList(controlTint());
         return radioButton;
     }
 
@@ -1434,6 +1462,7 @@ public class MainActivity extends Activity {
         checkBox.setText(text);
         checkBox.setTextSize(14);
         checkBox.setTextColor(primaryTextColor());
+        checkBox.setButtonTintList(controlTint());
         return checkBox;
     }
 
@@ -1473,6 +1502,20 @@ public class MainActivity extends Activity {
         drawable.setStroke(dp(1), strokeColor);
         drawable.setCornerRadius(dp(radiusDp));
         return drawable;
+    }
+
+    private ColorStateList controlTint() {
+        int[][] states = new int[][]{
+                new int[]{android.R.attr.state_checked},
+                new int[]{-android.R.attr.state_enabled},
+                new int[]{}
+        };
+        int[] colors = new int[]{
+                checkedControlColor(),
+                disabledControlColor(),
+                uncheckedControlColor()
+        };
+        return new ColorStateList(states, colors);
     }
 
     private int titleBarColor() {
@@ -1529,6 +1572,18 @@ public class MainActivity extends Activity {
 
     private int accentColor() {
         return darkTheme ? Color.rgb(20, 151, 176) : Color.rgb(18, 116, 150);
+    }
+
+    private int checkedControlColor() {
+        return darkTheme ? Color.rgb(92, 225, 245) : Color.rgb(17, 118, 156);
+    }
+
+    private int uncheckedControlColor() {
+        return darkTheme ? Color.rgb(183, 207, 224) : Color.rgb(78, 101, 120);
+    }
+
+    private int disabledControlColor() {
+        return darkTheme ? Color.rgb(88, 107, 123) : Color.rgb(156, 170, 184);
     }
 
     private int panelTitleColor() {
